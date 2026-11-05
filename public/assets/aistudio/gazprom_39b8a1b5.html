@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Газпром СПГ — Интерактивный 3D-тур</title>
+
+  <!-- Font Awesome & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tween.js for Camera/HUD Animation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+  <!-- Three.js r160+ via Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      /* Gazprom High-Tech Palette */
+      --gp-blue: #0062ff;
+      --gp-blue-hover: #004edc;
+      --gp-blue-active: #003db3;
+      --gp-blue-glow: rgba(0, 98, 255, 0.4);
+      --gp-cyan: #00d0f5;
+      --gp-cyan-glow: rgba(0, 208, 245, 0.35);
+      
+      /* Liquid Glass Tokens */
+      --glass-bg: rgba(255, 255, 255, 0.84);
+      --glass-bg-card: rgba(255, 255, 255, 0.90);
+      --glass-border: rgba(255, 255, 255, 0.95);
+      --glass-specular: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 1px 0 rgba(0, 98, 255, 0.08);
+      --glass-shadow-lg: 0 24px 60px -12px rgba(11, 21, 40, 0.16), 0 12px 24px -8px rgba(0, 98, 255, 0.08);
+      --glass-shadow-md: 0 12px 32px -4px rgba(11, 21, 40, 0.1), 0 4px 12px -2px rgba(0, 98, 255, 0.05);
+      --glass-shadow-sm: 0 6px 16px -2px rgba(11, 21, 40, 0.06);
+
+      /* High-Contrast Typography */
+      --gp-text-hero: #091322;
+      --gp-text-sub: #1e293b;
+      --gp-text-muted: #52637a;
+      --gp-text-caption: #718096;
+      
+      /* Semantic Accents */
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --warning: #d97706;
+      --warning-bg: #fffbeb;
+      
+      --ease-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 10%, #ffffff 0%, #edf2f9 100%);
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      color: var(--gp-text-hero);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: block;
+    }
+
+    .ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px 36px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(28px) saturate(200%);
+      -webkit-backdrop-filter: blur(28px) saturate(200%);
+      padding: 12px 24px;
+      border-radius: 24px;
+      box-shadow: var(--glass-shadow-md), var(--glass-specular);
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #0062ff 0%, #00d0f5 100%);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #fff;
+      box-shadow: 0 8px 24px var(--gp-blue-glow);
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--gp-text-hero);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-sub {
+      font-size: 11px;
+      font-weight: 800;
+      background: linear-gradient(135deg, rgba(0, 98, 255, 0.12), rgba(0, 208, 245, 0.16));
+      color: var(--gp-blue);
+      padding: 3px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 98, 255, 0.24);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .brand-title p {
+      font-size: 12.5px;
+      color: var(--gp-text-muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 7px 16px;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      font-weight: 700;
+      color: var(--gp-text-sub);
+      font-size: 12px;
+      box-shadow: var(--glass-shadow-sm);
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.85);
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.8); opacity: 0.55; }
+    }
+
+    /* AUTH TRIGGER & USER PROFILE WIDGET */
+    .btn-auth-trigger {
+      background: linear-gradient(135deg, var(--gp-blue), #0050d4);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 8px 18px;
+      border-radius: 30px;
+      font-size: 12.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px var(--gp-blue-glow), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+      transition: all 0.25s var(--ease-smooth);
+    }
+
+    .btn-auth-trigger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px var(--gp-blue-glow);
+    }
+
+    .user-profile-widget {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 4px 6px 4px 14px;
+      border-radius: 30px;
+      border: 1px solid rgba(0, 98, 255, 0.2);
+      box-shadow: var(--glass-shadow-sm);
+    }
+
+    .user-info-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .user-name-display {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--gp-text-hero);
+    }
+
+    .user-role-display {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gp-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-logout {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: #f1f5f9;
+      color: var(--gp-text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .btn-logout:hover {
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+
+    /* MAIN SIDEBAR HUD */
+    .main-body {
+      display: flex;
+      justify-content: flex-end;
+      align-items: flex-start;
+      margin-top: 16px;
+      flex-grow: 1;
+    }
+
+    .info-card {
+      width: 440px;
+      background: var(--glass-bg-card);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(36px) saturate(220%);
+      -webkit-backdrop-filter: blur(36px) saturate(220%);
+      border-radius: 28px;
+      padding: 26px;
+      box-shadow: var(--glass-shadow-lg), var(--glass-specular);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      transition: transform 0.35s var(--ease-smooth), opacity 0.3s ease;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      padding-bottom: 16px;
+      gap: 14px;
+    }
+
+    .card-step-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--gp-blue);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+
+    .card-header h2 {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--gp-text-hero);
+      line-height: 1.25;
+      letter-spacing: -0.4px;
+    }
+
+    .card-category-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(0, 98, 255, 0.08), rgba(0, 208, 245, 0.12));
+      color: var(--gp-blue);
+      white-space: nowrap;
+      border: 1px solid rgba(0, 98, 255, 0.2);
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--gp-text-sub);
+      font-weight: 500;
+    }
+
+    /* TELEMETRY */
+    .metrics-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .metrics-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metrics-container h3 {
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: var(--gp-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 800;
+    }
+
+    .telemetry-live-pill {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--success);
+      background: var(--success-bg);
+      border: 1px solid rgba(5, 150, 105, 0.2);
+      padding: 2px 8px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card-interactive {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 4px 14px rgba(11, 21, 40, 0.04);
+      transition: all 0.28s var(--ease-smooth);
+    }
+
+    .metric-card-interactive:hover {
+      background: #ffffff;
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px -4px rgba(0, 98, 255, 0.15);
+      border-color: rgba(0, 98, 255, 0.25);
+    }
+
+    .metric-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metric-name {
+      font-size: 11px;
+      color: var(--gp-text-muted);
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metric-trend-tag {
+      font-size: 9.5px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .metric-trend-tag.positive { color: #047857; background: #d1fae5; }
+    .metric-trend-tag.neutral { color: var(--gp-blue); background: #e0f2fe; }
+
+    .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--gp-text-hero);
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      letter-spacing: -0.5px;
+      margin-top: 2px;
+    }
+
+    .metric-unit {
+      font-size: 10px;
+      color: var(--gp-text-muted);
+      font-weight: 600;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .metric-meter-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(148, 163, 184, 0.25);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .metric-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gp-blue), var(--gp-cyan));
+      border-radius: 3px;
+      transition: width 0.6s var(--ease-smooth);
+    }
+
+    /* CASE STUDY */
+    .case-box {
+      background: linear-gradient(135deg, rgba(240, 246, 255, 0.85) 0%, rgba(255, 255, 255, 0.92) 100%);
+      border: 1px solid rgba(0, 98, 255, 0.22);
+      border-radius: 20px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 24px -6px rgba(0, 98, 255, 0.08);
+    }
+
+    .case-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--gp-text-hero);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .case-icon-badge {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--gp-blue), var(--gp-cyan));
+      color: #fff;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .case-detail {
+      font-size: 12.5px;
+      color: var(--gp-text-sub);
+      line-height: 1.5;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .case-effect {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--gp-blue);
+      background: #ffffff;
+      padding: 8px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 98, 255, 0.2);
+    }
+
+    /* FOOTER CONTROLS */
+    footer {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+      width: 100%;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .timeline-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(28px) saturate(200%);
+      -webkit-backdrop-filter: blur(28px) saturate(200%);
+      padding: 7px 9px;
+      border-radius: 44px;
+      box-shadow: var(--glass-shadow-md);
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 18px;
+      border-radius: 32px;
+      cursor: pointer;
+      transition: all 0.28s var(--ease-smooth);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gp-text-muted);
+    }
+
+    .step-item:hover {
+      color: var(--gp-text-hero);
+      background: rgba(255, 255, 255, 0.65);
+      transform: translateY(-1.5px);
+    }
+
+    .step-item.active {
+      color: #ffffff;
+      background: linear-gradient(135deg, #0062ff 0%, #0050d4 100%);
+      box-shadow: 0 8px 24px -2px var(--gp-blue-glow);
+    }
+
+    .step-item .num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(11, 21, 40, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11.5px;
+      font-weight: 800;
+    }
+
+    .step-item.active .num {
+      background: rgba(255, 255, 255, 0.28);
+      color: #ffffff;
+    }
+
+    .controls-dock {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn-nav {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: var(--gp-text-hero);
+      padding: 12px 26px;
+      border-radius: 36px;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.25s var(--ease-smooth);
+      box-shadow: var(--glass-shadow-sm);
+    }
+
+    .btn-nav:hover {
+      background: #ffffff;
+      border-color: rgba(0, 98, 255, 0.3);
+      color: var(--gp-blue);
+      transform: translateY(-2px);
+      box-shadow: var(--glass-shadow-md);
+    }
+
+    .btn-nav.primary {
+      background: linear-gradient(135deg, #0062ff 0%, #00d0f5 100%);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      box-shadow: 0 10px 28px -4px var(--gp-blue-glow);
+    }
+
+    .btn-nav.primary:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 14px 34px -2px var(--gp-blue-glow);
+    }
+
+    .btn-nav.primary.active-tour {
+      background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    }
+
+    .view-hint {
+      position: absolute;
+      bottom: 24px;
+      left: 36px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 10px 18px;
+      border-radius: 14px;
+      font-size: 12px;
+      color: var(--gp-text-sub);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--glass-shadow-sm);
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(11, 21, 40, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-modal {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      border-radius: 28px;
+      padding: 32px 30px;
+      box-shadow: var(--glass-shadow-lg), var(--glass-specular);
+      backdrop-filter: blur(40px) saturate(220%);
+      -webkit-backdrop-filter: blur(40px) saturate(220%);
+      position: relative;
+      animation: modalPop 0.3s var(--ease-elastic);
+    }
+
+    @keyframes modalPop {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .btn-close-modal {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: #f1f5f9;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gp-text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .btn-close-modal:hover {
+      background: #e2e8f0;
+      color: var(--gp-text-hero);
+    }
+
+    .auth-tabs {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: 14px;
+      padding: 4px;
+      margin-bottom: 22px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gp-text-muted);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .auth-tab.active {
+      background: #ffffff;
+      color: var(--gp-blue);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .auth-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--gp-text-hero);
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: 12.5px;
+      color: var(--gp-text-muted);
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gp-text-sub);
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-wrapper i {
+      position: absolute;
+      left: 14px;
+      color: var(--gp-text-muted);
+      font-size: 14px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 11px 14px 11px 38px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-family: inherit;
+      color: var(--gp-text-hero);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .form-input:focus {
+      border-color: var(--gp-blue);
+      box-shadow: 0 0 0 3px rgba(0, 98, 255, 0.15);
+    }
+
+    .strength-meter-container {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .strength-bar {
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .strength-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+
+    .strength-caption {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gp-text-muted);
+    }
+
+    .auth-feedback-box {
+      display: none;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      line-height: 1.4;
+    }
+
+    .auth-feedback-box.error {
+      display: block;
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .auth-feedback-box.success {
+      display: block;
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-submit-auth {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--gp-blue), #0050d4);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 24px var(--gp-blue-glow);
+      transition: all 0.25s var(--ease-smooth);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-submit-auth:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px var(--gp-blue-glow);
+    }
+
+    .btn-submit-auth:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    @media (max-width: 1080px) {
+      .info-card { width: 360px; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .step-item span.title { display: none; }
+      header { padding: 10px 16px; }
+      .status-pill { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL Canvas -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- UI HUD Layer -->
+  <div class="ui-layer">
+    <header class="interactive">
+      <div class="brand">
+        <div class="brand-logo">
+          <i class="fa-solid fa-fire-flame-curved"></i>
+        </div>
+        <div class="brand-title">
+          <h1>ГАЗПРОМ СПГ <span class="badge-sub">3D-ТУР PRO</span></h1>
+          <p>Архитектурный цифровой двойник завода сжиженного природного газа</p>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="status-pill">
+          <div class="status-dot"></div>
+          <span>РЕЖИМ: ОНЛАЙН СИМУЛЯЦИЯ</span>
+        </div>
+
+        <button class="btn-auth-trigger" id="btnAuthTrigger">
+          <i class="fa-solid fa-user-shield"></i>
+          <span>Вход / Регистрация</span>
+        </button>
+
+        <div class="user-profile-widget" id="userProfileWidget">
+          <div class="user-info-text">
+            <span class="user-name-display" id="userNameDisplay">Инженер-технолог</span>
+            <span class="user-role-display" id="userRoleDisplay">Specialist</span>
+          </div>
+          <button class="btn-logout" id="btnLogout" title="Выйти из аккаунта">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-body">
+      <div class="info-card interactive" id="infoCard">
+        <div class="card-header">
+          <div>
+            <span class="card-step-badge" id="stepBadge">УЗЕЛ 01 / 05</span>
+            <h2 id="cardTitle">Входная сепарация и осушка</h2>
+          </div>
+          <span class="card-category-tag" id="cardCategory">Подготовка газа</span>
+        </div>
+
+        <p class="card-desc" id="cardDesc">
+          Прием природного газа, глубокая абсорбционная осушка и удаление примесей для предотвращения криогенного забивания аппаратов.
+        </p>
+
+        <div class="metrics-container">
+          <div class="metrics-header-row">
+            <h3><i class="fa-solid fa-chart-line" style="color:var(--gp-blue);"></i> Параметры телеметрии</h3>
+            <span class="telemetry-live-pill">LIVE 1.0s</span>
+          </div>
+          <div class="metrics-grid" id="metricsGrid"></div>
+        </div>
+
+        <div class="case-box">
+          <div class="case-title">
+            <div class="case-icon-badge">
+              <i class="fa-solid fa-bolt"></i>
+            </div>
+            <span id="caseTitle">Модернизация адсорбционных колонн</span>
+          </div>
+          <p class="case-detail" id="caseDetail">
+            Внедрение автоматического переключения цеолитов по датчику точки росы.
+          </p>
+          <div class="case-effect">
+            <i class="fa-solid fa-circle-check"></i>
+            <span id="caseEffect">Экономия: +14.8 млн руб./год</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="timeline-bar interactive" id="timelineBar">
+        <div class="step-item active" id="step-btn-0">
+          <div class="num">1</div>
+          <span class="title">Сепарация</span>
+        </div>
+        <div class="step-item" id="step-btn-1">
+          <div class="num">2</div>
+          <span class="title">Фракционирование</span>
+        </div>
+        <div class="step-item" id="step-btn-2">
+          <div class="num">3</div>
+          <span class="title">Сжижение (-161°C)</span>
+        </div>
+        <div class="step-item" id="step-btn-3">
+          <div class="num">4</div>
+          <span class="title">Резервуары СПГ</span>
+        </div>
+        <div class="step-item" id="step-btn-4">
+          <div class="num">5</div>
+          <span class="title">Терминал и Танкер</span>
+        </div>
+      </div>
+
+      <div class="controls-dock interactive">
+        <button class="btn-nav" id="prevBtn"><i class="fa-solid fa-arrow-left"></i> Назад</button>
+        <button class="btn-nav primary" id="autoTourBtn">
+          <i class="fa-solid fa-play" id="playIcon"></i> <span>Авто-тур</span>
+        </button>
+        <button class="btn-nav" id="nextBtn">Далее <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+    </footer>
+
+    <div class="view-hint">
+      <i class="fa-solid fa-cube"></i>
+      <span>ЛКМ: Вращение макета | ПКМ: Панорама | Колесо: Зум | Клик по меткам в сцене</span>
+    </div>
+  </div>
+
+  <!-- AUTHENTICATION MODAL DIALOG (MANUAL INPUT ONLY) -->
+  <div class="modal-overlay interactive" id="authModalOverlay">
+    <div class="auth-modal">
+      <button class="btn-close-modal" id="btnCloseModal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLoginBtn">Вход</button>
+        <button class="auth-tab" id="tabRegisterBtn">Регистрация</button>
+      </div>
+
+      <h3 class="auth-title" id="authFormTitle">Авторизация в системе</h3>
+      <p class="auth-subtitle" id="authFormSubtitle">Доступ к моделированию и инженерным параметрам двойника</p>
+
+      <div class="auth-feedback-box" id="authFeedbackBox"></div>
+
+      <form id="authForm">
+        <div class="form-group" id="groupFullName" style="display: none;">
+          <label for="inputFullName">ФИО / Должность</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-user"></i>
+            <input type="text" id="inputFullName" class="form-input" placeholder="Иванов Алексей Петрович">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="inputEmail">Корпоративный или личный Email</label>
+          <div class="input-wrapper">
+            <i class="fa-regular fa-envelope"></i>
+            <input type="email" id="inputEmail" class="form-input" placeholder="engineer@gazprom.ru" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="inputPassword">Пароль</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="inputPassword" class="form-input" placeholder="••••••••" required>
+          </div>
+          
+          <div class="strength-meter-container" id="strengthContainer">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strengthFill"></div>
+            </div>
+            <span class="strength-caption" id="strengthCaption">Сложность: введите пароль</span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit-auth" id="btnSubmitAuth">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span>Войти в аккаунт</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- AUTH CLIENT MANAGER (HYBRID: REST API + ZERO-FAILURE CRYPTO FALLBACK) -->
+  <script>
+    const DEMO_ACCOUNTS = {
+      lead: {
+        email: "lead.engineer@gazprom.ru",
+        password: "Gazprom2026!Lead",
+        fullName: "Смирнов Дмитрий Васильевич",
+        role: "Главный технолог СПГ"
+      },
+      student: {
+        email: "qwes.rev@gmail.com",
+        password: "Gazprom2026!Student",
+        fullName: "Алексей Ревякин",
+        role: "Студент-исследователь"
+      },
+      auditor: {
+        email: "investor.audit@gazprom.ru",
+        password: "Gazprom2026!Audit",
+        fullName: "Ван дер Берг Эрик",
+        role: "ESG Аудитор"
+      }
+    };
+
+    const AuthClient = (() => {
+      const API_BASE = "http://localhost:8000/api/auth";
+
+      let inMemoryAccessToken = null;
+      let inMemoryCurrentUser = null;
+
+      const localUsersKey = "gp_local_users_v2";
+      
+      const getStoredLocalUsers = () => {
+        try {
+          const raw = localStorage.getItem(localUsersKey);
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      };
+
+      const saveStoredLocalUsers = (users) => {
+        try {
+          localStorage.setItem(localUsersKey, JSON.stringify(users));
+        } catch (e) {
+          console.warn("Storage restricted", e);
+        }
+      };
+
+      const initFallbackStorage = async () => {
+        const users = getStoredLocalUsers();
+        for (const k of Object.keys(DEMO_ACCOUNTS)) {
+          const d = DEMO_ACCOUNTS[k];
+          if (!users[d.email]) {
+            const salt = "gp_salt_" + Math.random();
+            users[d.email] = {
+              id: "usr_" + Math.random().toString(36).substr(2, 9),
+              email: d.email,
+              fullName: d.fullName,
+              role: d.role,
+              salt: salt,
+              passHash: await hashPasswordFallback(d.password, salt)
+            };
+          }
+        }
+        saveStoredLocalUsers(users);
+      };
+
+      async function hashPasswordFallback(password, salt) {
+        const enc = new TextEncoder();
+        const keyMaterial = await window.crypto.subtle.importKey(
+          "raw",
+          enc.encode(password),
+          { name: "PBKDF2" },
+          false,
+          ["deriveBits", "deriveKey"]
+        );
+        const derivedKey = await window.crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt: enc.encode(salt),
+            iterations: 100000,
+            hash: "SHA-256"
+          },
+          keyMaterial,
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt"]
+        );
+        const exported = await window.crypto.subtle.exportKey("raw", derivedKey);
+        return Array.from(new Uint8Array(exported)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      const checkPasswordComplexity = (pwd) => {
+        let score = 0;
+        if (pwd.length >= 8) score++;
+        if (/[A-Z]/.test(pwd)) score++;
+        if (/[a-z]/.test(pwd)) score++;
+        if (/\d/.test(pwd)) score++;
+        if (/[!@#$%^&*(),.?":{}|<>\-_=+]/.test(pwd)) score++;
+        return score;
+      };
+
+      const register = async (email, fullName, password) => {
+        email = email.trim().toLowerCase();
+
+        try {
+          const res = await fetch(`${API_BASE}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ email, full_name: fullName, password })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            inMemoryAccessToken = data.access_token;
+            inMemoryCurrentUser = data.user;
+            return inMemoryCurrentUser;
+          }
+          if (res.status === 400 || res.status === 429) {
+            const err = await res.json();
+            throw new Error(err.detail || "Ошибка регистрации");
+          }
+        } catch (netErr) {
+          console.warn("Backend unavailable, using local WebCrypto fallback:", netErr.message);
+        }
+
+        const users = getStoredLocalUsers();
+        if (users[email]) {
+          throw new Error("Не удалось выполнить регистрацию с указанными данными.");
+        }
+
+        const salt = "gp_salt_" + Math.random().toString(36).substr(2);
+        const passHash = await hashPasswordFallback(password, salt);
+        const newUser = {
+          id: "usr_" + Math.random().toString(36).substr(2, 9),
+          email: email,
+          fullName: fullName || "Специалист СПГ",
+          role: "Специалист",
+          salt: salt,
+          passHash: passHash
+        };
+        users[email] = newUser;
+        saveStoredLocalUsers(users);
+
+        inMemoryAccessToken = "local_jwt_token_" + Date.now();
+        inMemoryCurrentUser = {
+          id: newUser.id,
+          email: newUser.email,
+          full_name: newUser.fullName,
+          role: newUser.role
+        };
+        return inMemoryCurrentUser;
+      };
+
+      const login = async (email, password) => {
+        email = email.trim().toLowerCase();
+
+        try {
+          const res = await fetch(`${API_BASE}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ email, password })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            inMemoryAccessToken = data.access_token;
+            inMemoryCurrentUser = data.user;
+            return inMemoryCurrentUser;
+          }
+          if (res.status === 401 || res.status === 429) {
+            const err = await res.json();
+            throw new Error(err.detail || "Неверный логин или пароль");
+          }
+        } catch (netErr) {
+          console.warn("Backend unavailable, checking local fallback:", netErr.message);
+        }
+
+        const users = getStoredLocalUsers();
+        const user = users[email];
+        if (!user) {
+          throw new Error("Неверный логин или пароль");
+        }
+
+        const computedHash = await hashPasswordFallback(password, user.salt);
+        if (computedHash !== user.passHash) {
+          throw new Error("Неверный логин или пароль");
+        }
+
+        inMemoryAccessToken = "local_jwt_token_" + Date.now();
+        inMemoryCurrentUser = {
+          id: user.id,
+          email: user.email,
+          full_name: user.fullName,
+          role: user.role
+        };
+        return inMemoryCurrentUser;
+      };
+
+      const logout = async () => {
+        try {
+          await fetch(`${API_BASE}/logout`, { method: "POST", credentials: "include" });
+        } catch {}
+        inMemoryAccessToken = null;
+        inMemoryCurrentUser = null;
+      };
+
+      initFallbackStorage();
+
+      return {
+        checkPasswordComplexity,
+        register,
+        login,
+        logout,
+        getCurrentUser: () => inMemoryCurrentUser
+      };
+    })();
+
+    // AUTH UI CONTROLLER
+    let authMode = "login";
+
+    const modalOverlay = document.getElementById("authModalOverlay");
+    const btnAuthTrigger = document.getElementById("btnAuthTrigger");
+    const btnCloseModal = document.getElementById("btnCloseModal");
+    const tabLoginBtn = document.getElementById("tabLoginBtn");
+    const tabRegisterBtn = document.getElementById("tabRegisterBtn");
+    const groupFullName = document.getElementById("groupFullName");
+    const authFormTitle = document.getElementById("authFormTitle");
+    const authFormSubtitle = document.getElementById("authFormSubtitle");
+    const strengthContainer = document.getElementById("strengthContainer");
+    const strengthFill = document.getElementById("strengthFill");
+    const strengthCaption = document.getElementById("strengthCaption");
+    const authFeedbackBox = document.getElementById("authFeedbackBox");
+    const authForm = document.getElementById("authForm");
+    const inputPassword = document.getElementById("inputPassword");
+    const btnSubmitAuth = document.getElementById("btnSubmitAuth");
+    const userProfileWidget = document.getElementById("userProfileWidget");
+    const userNameDisplay = document.getElementById("userNameDisplay");
+    const userRoleDisplay = document.getElementById("userRoleDisplay");
+    const btnLogout = document.getElementById("btnLogout");
+
+    const setAuthMode = (mode) => {
+      authMode = mode;
+      authFeedbackBox.className = "auth-feedback-box";
+      authFeedbackBox.innerText = "";
+
+      if (mode === "login") {
+        tabLoginBtn.classList.add("active");
+        tabRegisterBtn.classList.remove("active");
+        groupFullName.style.display = "none";
+        strengthContainer.style.display = "none";
+        authFormTitle.innerText = "Авторизация в системе";
+        authFormSubtitle.innerText = "Доступ к моделированию и инженерным параметрам двойника";
+        btnSubmitAuth.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> <span>Войти в аккаунт</span>`;
+      } else {
+        tabRegisterBtn.classList.add("active");
+        tabLoginBtn.classList.remove("active");
+        groupFullName.style.display = "flex";
+        strengthContainer.style.display = "flex";
+        authFormTitle.innerText = "Регистрация специалиста";
+        authFormSubtitle.innerText = "Создание учетной записи сотрудника или исследователя";
+        btnSubmitAuth.innerHTML = `<i class="fa-solid fa-user-plus"></i> <span>Зарегистрироваться</span>`;
+      }
+    };
+
+    btnAuthTrigger.addEventListener("click", () => {
+      modalOverlay.style.display = "flex";
+      setAuthMode("login");
+    });
+
+    btnCloseModal.addEventListener("click", () => {
+      modalOverlay.style.display = "none";
+    });
+
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) modalOverlay.style.display = "none";
+    });
+
+    tabLoginBtn.addEventListener("click", () => setAuthMode("login"));
+    tabRegisterBtn.addEventListener("click", () => setAuthMode("register"));
+
+    inputPassword.addEventListener("input", (e) => {
+      if (authMode !== "register") return;
+      const pwd = e.target.value;
+      const score = AuthClient.checkPasswordComplexity(pwd);
+
+      const colors = ["#ef4444", "#f97316", "#eab308", "#3b82f6", "#10b981"];
+      const labels = ["Ненадежный", "Слабый", "Средний", "Хороший", "Надежный (OWASP)"];
+
+      strengthFill.style.width = `${(score / 5) * 100}%`;
+      strengthFill.style.backgroundColor = colors[Math.max(0, score - 1)] || "#e2e8f0";
+      strengthCaption.innerText = `Сложность: ${labels[Math.max(0, score - 1)] || "введите пароль"}`;
+    });
+
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      authFeedbackBox.className = "auth-feedback-box";
+      authFeedbackBox.innerText = "";
+
+      const email = document.getElementById("inputEmail").value;
+      const password = inputPassword.value;
+      const fullName = document.getElementById("inputFullName").value;
+
+      if (authMode === "register") {
+        if (AuthClient.checkPasswordComplexity(password) < 5) {
+          authFeedbackBox.className = "auth-feedback-box error";
+          authFeedbackBox.innerText = "Пароль должен содержать от 8 символов, заглавную и строчную буквы, цифру и спецсимвол.";
+          return;
+        }
+      }
+
+      btnSubmitAuth.disabled = true;
+      btnSubmitAuth.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Проверка...</span>`;
+
+      try {
+        let user;
+        if (authMode === "login") {
+          user = await AuthClient.login(email, password);
+        } else {
+          user = await AuthClient.register(email, fullName, password);
+        }
+
+        authFeedbackBox.className = "auth-feedback-box success";
+        authFeedbackBox.innerText = "Успешная авторизация!";
+        
+        setTimeout(() => {
+          modalOverlay.style.display = "none";
+          btnAuthTrigger.style.display = "none";
+          userProfileWidget.style.display = "flex";
+          userNameDisplay.innerText = user.full_name;
+          userRoleDisplay.innerText = user.role;
+        }, 500);
+
+      } catch (err) {
+        authFeedbackBox.className = "auth-feedback-box error";
+        authFeedbackBox.innerText = err.message || "Ошибка входа. Проверьте данные.";
+      } finally {
+        btnSubmitAuth.disabled = false;
+        btnSubmitAuth.innerHTML = authMode === "login" 
+          ? `<i class="fa-solid fa-right-to-bracket"></i> <span>Войти в аккаунт</span>`
+          : `<i class="fa-solid fa-user-plus"></i> <span>Зарегистрироваться</span>`;
+      }
+    });
+
+    btnLogout.addEventListener("click", async () => {
+      await AuthClient.logout();
+      userProfileWidget.style.display = "none";
+      btnAuthTrigger.style.display = "flex";
+    });
+  </script>
+
+  <!-- 3D ENGINE SCRIPT (Three.js r160+) -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // 1. TOUR DATA MODEL
+    const tourData = [
+      {
+        id: "step1",
+        stepOrder: "УЗЕЛ 01 / 05",
+        title: "Входная сепарация и осушка",
+        category: "Подготовка газа",
+        desc: "Первичный прием углеводородного сырья, отделение механических взвесей, абсорбционная осушка влаги и удаление кислых компонентов на молекулярных ситах.",
+        camera: { x: -64, y: 44, z: 52 },
+        lookAt: { x: -38, y: 8, z: 0 },
+        metrics: [
+          { name: "Расход сырья", val: "1 280", unit: "тыс. м³/ч", trend: "+2.4%", fill: 88, status: "positive" },
+          { name: "Точка росы", val: "-72.4", unit: "°C", trend: "НОРМА", fill: 94, status: "neutral" },
+          { name: "Очистка", val: "99.98", unit: "%", trend: "MAX", fill: 100, status: "positive" }
+        ],
+        caseTitle: "Интеллектуальная осушка цеолитами",
+        caseDetail: "Динамическое переключение циклов регенерации сберегает топливный газ на продувку.",
+        caseEffect: "Снижение выбросов CO₂ на 3 200 т/год"
+      },
+      {
+        id: "step2",
+        stepOrder: "УЗЕЛ 02 / 05",
+        title: "Ректификация и фракционирование",
+        category: "NGL Передел",
+        desc: "Колонные ректификационные аппараты с решетчатыми эстакадами и трубными галереями. Четкое разделение этана, пропан-бутановой фракции и стабильного газового конденсата.",
+        camera: { x: -34, y: 48, z: 54 },
+        lookAt: { x: -12, y: 14, z: 0 },
+        metrics: [
+          { name: "Отбор этана", val: "95.1", unit: "%", trend: "+1.8%", fill: 95, status: "positive" },
+          { name: "Темп. куба", val: "+114", unit: "°C", trend: "СТАБ.", fill: 78, status: "neutral" },
+          { name: "Выпуск СУГ", val: "340", unit: "т/ч", trend: "+5.0%", fill: 86, status: "positive" }
+        ],
+        caseTitle: "Каскадная рекуперация тепла",
+        caseDetail: "Повторный отбор тепла кубового остатка колонн снизил расход пара на ребойлеры.",
+        caseEffect: "Энергоэффективность участка: +8.2%"
+      },
+      {
+        id: "step3",
+        stepOrder: "УЗЕЛ 03 / 05",
+        title: "Основной блок сжижения газа",
+        category: "Криогенный передел",
+        desc: "Технологическое сердце завода: спиральновитой теплообменник MCHE с прозрачной смотровой галереей, компрессоры смешанного хладагента и аппараты воздушного охлаждения. Охлаждение метана до -161°C.",
+        camera: { x: 14, y: 40, z: 54 },
+        lookAt: { x: 12, y: 10, z: 0 },
+        metrics: [
+          { name: "Темп. СПГ", val: "-161.4", unit: "°C", trend: "-0.2°C", fill: 98, status: "positive" },
+          { name: "КПД агрегата", val: "93.4", unit: "%", trend: "ВЫСОКИЙ", fill: 93, status: "positive" },
+          { name: "Энергоемкость", val: "244", unit: "кВт·ч/т", trend: "-4.1%", fill: 72, status: "neutral" }
+        ],
+        caseTitle: "Оптимизация цикла Mixed Refrigerant",
+        caseDetail: "Нейросетевая балансировка состава хладагента под суточные колебания температуры воздуха.",
+        caseEffect: "Дополнительно +56 000 тонн СПГ в год"
+      },
+      {
+        id: "step4",
+        stepOrder: "УЗЕЛ 04 / 05",
+        title: "Изотермический парк хранения СПГ",
+        category: "Криогенное хранение",
+        desc: "Крупнотоннажные двухоболочечные изотермические резервуары полного герметичного сдерживания. Хранение при температуре -161°C с непрерывным отбором и компримированием паров BOG.",
+        camera: { x: 50, y: 44, z: 46 },
+        lookAt: { x: 38, y: 12, z: -2 },
+        metrics: [
+          { name: "Уровень танков", val: "86.2", unit: "%", trend: "ОПТИМ.", fill: 86, status: "neutral" },
+          { name: "Объем парка", val: "320 000", unit: "м³", trend: "MAX", fill: 92, status: "positive" },
+          { name: "BOG фактор", val: "0.038", unit: "%/сут", trend: "-12%", fill: 45, status: "positive" }
+        ],
+        caseTitle: "Нулевое факельное сжигание BOG",
+        caseDetail: "100% паров кипения отбираются бустерным компрессором и возвращаются в топливную сеть.",
+        caseEffect: "Экологический стандарт ESG Platinum"
+      },
+      {
+        id: "step5",
+        stepOrder: "УЗЕЛ 05 / 05",
+        title: "Морской терминал и Танкер-газовоз",
+        category: "Логистика и экспорт",
+        desc: "Глубоководный причальный мол с криогенными стендерами налива и СПГ-танкер арктического класса со сферическими грузовыми танками типа Moss.",
+        camera: { x: 92, y: 36, z: 56 },
+        lookAt: { x: 68, y: 6, z: 4 },
+        metrics: [
+          { name: "Скорость налива", val: "12 500", unit: "м³/ч", trend: "НОРМА", fill: 95, status: "positive" },
+          { name: "Емкость судна", val: "174 000", unit: "м³", trend: "CLASS-7", fill: 100, status: "neutral" },
+          { name: "Время стоянки", val: "14.0", unit: "ч", trend: "-1.5ч", fill: 70, status: "positive" }
+        ],
+        caseTitle: "Криогенные стендеры с ERC/QCDC",
+        caseDetail: "Система быстроразъемных соединений и аварийного разъединения без пролива продукта.",
+        caseEffect: "100% безаварийность морских операций"
+      }
+    ];
+
+    let currentStep = 0;
+    let isAutoTour = false;
+    let autoTourTimer = null;
+
+    // 2. SCENE, RENDERER & COLOR PIPELINE
+    const canvas = document.getElementById('webgl-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf4f7fb);
+    scene.fog = new THREE.FogExp2(0xf4f7fb, 0.0022);
+
+    const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.5, 2000);
+    camera.position.set(tourData[0].camera.x, tourData[0].camera.y, tourData[0].camera.z);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    controls.minDistance = 15;
+    controls.maxDistance = 350;
+    controls.target.set(tourData[0].lookAt.x, tourData[0].lookAt.y, tourData[0].lookAt.z);
+
+    // 3. PBR ENVIRONMENT SETUP
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnv = new RoomEnvironment();
+    const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    scene.environment = envTexture;
+
+    roomEnv.dispose();
+    pmremGenerator.dispose();
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xdce7f5, 0.5);
+    hemiLight.position.set(0, 80, 0);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.25);
+    sunLight.position.set(80, 130, 90);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 4096;
+    sunLight.shadow.mapSize.height = 4096;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 450;
+    const shadowDist = 150;
+    sunLight.shadow.camera.left = -shadowDist;
+    sunLight.shadow.camera.right = shadowDist;
+    sunLight.shadow.camera.top = shadowDist;
+    sunLight.shadow.camera.bottom = -shadowDist;
+    sunLight.shadow.bias = -0.00015;
+    scene.add(sunLight);
+
+    const fillLight = new THREE.DirectionalLight(0xd9e8fc, 0.35);
+    fillLight.position.set(-80, 50, -60);
+    scene.add(fillLight);
+
+    // 4. PBR MATERIALS PALETTE
+    const materials = {
+      baseClay: new THREE.MeshStandardMaterial({ color: 0xfafcff, roughness: 0.35, metalness: 0.05 }),
+      panelWhite: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.02 }),
+      concretePaving: new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.8, metalness: 0.0 }),
+      roadWay: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.55 }),
+      roadMarking: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      gpBlue: new THREE.MeshStandardMaterial({ color: 0x0062ff, roughness: 0.25, metalness: 0.3 }),
+      gpCyan: new THREE.MeshStandardMaterial({ color: 0x00d0f5, roughness: 0.28, metalness: 0.3 }),
+      steelTruss: new THREE.MeshStandardMaterial({ color: 0xd3e0ea, roughness: 0.35, metalness: 0.75 }),
+      darkAccent: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.5 }),
+      frostedGlass: new THREE.MeshPhysicalMaterial({
+        color: 0xe0f2fe,
+        transparent: true,
+        opacity: 0.5,
+        roughness: 0.12,
+        transmission: 0.85,
+        thickness: 1.2,
+        ior: 1.45,
+        reflectivity: 0.7
+      }),
+      cryoGlass: new THREE.MeshPhysicalMaterial({
+        color: 0x0062ff,
+        transparent: true,
+        opacity: 0.65,
+        roughness: 0.15,
+        transmission: 0.5,
+        thickness: 0.8
+      }),
+      waterDeep: new THREE.MeshStandardMaterial({ color: 0x0052cc, roughness: 0.15, metalness: 0.65, transparent: true, opacity: 0.95 }),
+      waterShallow: new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.18, metalness: 0.45, transparent: true, opacity: 0.85 }),
+      treeFoliage: new THREE.MeshStandardMaterial({ color: 0x0062ff, roughness: 0.4 }),
+      treeTrunk: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 })
+    };
+
+    const plantRoot = new THREE.Group();
+    scene.add(plantRoot);
+
+    // 5. WORLD GEOMETRY & ISLAND SHELVES
+    const lowerShelf = new THREE.Mesh(new THREE.BoxGeometry(260, 4, 150), materials.panelWhite);
+    lowerShelf.position.set(8, -3.5, 0);
+    lowerShelf.receiveShadow = true;
+    plantRoot.add(lowerShelf);
+
+    const mainIsland = new THREE.Mesh(new THREE.BoxGeometry(240, 3, 130), materials.baseClay);
+    mainIsland.position.set(2, -0.5, 0);
+    mainIsland.receiveShadow = true;
+    plantRoot.add(mainIsland);
+
+    const pavement = new THREE.Mesh(new THREE.PlaneGeometry(238, 128), materials.concretePaving);
+    pavement.rotation.x = -Math.PI / 2;
+    pavement.position.set(2, 1.02, 0);
+    pavement.receiveShadow = true;
+    plantRoot.add(pavement);
+
+    for (let r = -48; r <= 48; r += 24) {
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(236, 4.5), materials.roadWay);
+      road.rotation.x = -Math.PI / 2;
+      road.position.set(2, 1.03, r);
+      road.receiveShadow = true;
+      plantRoot.add(road);
+
+      for (let mx = -100; mx <= 100; mx += 8) {
+        const dash = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.25), materials.roadMarking);
+        dash.rotation.x = -Math.PI / 2;
+        dash.position.set(mx, 1.04, r);
+        plantRoot.add(dash);
+      }
+    }
+
+    const crossRoad1 = new THREE.Mesh(new THREE.PlaneGeometry(5, 110), materials.roadWay);
+    crossRoad1.rotation.x = -Math.PI / 2;
+    crossRoad1.position.set(-24, 1.035, 0);
+    plantRoot.add(crossRoad1);
+
+    const crossRoad2 = new THREE.Mesh(new THREE.PlaneGeometry(5, 110), materials.roadWay);
+    crossRoad2.rotation.x = -Math.PI / 2;
+    crossRoad2.position.set(26, 1.035, 0);
+    plantRoot.add(crossRoad2);
+
+    const deepWater = new THREE.Mesh(new THREE.BoxGeometry(85, 3.8, 128), materials.waterDeep);
+    deepWater.position.set(88, -0.9, 0);
+    deepWater.receiveShadow = true;
+    plantRoot.add(deepWater);
+
+    const shallowStep = new THREE.Mesh(new THREE.BoxGeometry(14, 2.5, 126), materials.waterShallow);
+    shallowStep.position.set(51, -1.2, 0);
+    plantRoot.add(shallowStep);
+
+    const pierWharf = new THREE.Mesh(new THREE.BoxGeometry(12, 4.2, 92), materials.panelWhite);
+    pierWharf.position.set(52, 1.1, 0);
+    pierWharf.receiveShadow = true;
+    pierWharf.castShadow = true;
+    plantRoot.add(pierWharf);
+
+    for (let bz = -40; bz <= 40; bz += 10) {
+      const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 0.9, 14), materials.darkAccent);
+      bollard.position.set(56.8, 3.65, bz);
+      bollard.castShadow = true;
+      plantRoot.add(bollard);
+    }
+
+    function addTree(x, z, scale = 1) {
+      const tree = new THREE.Group();
+      tree.position.set(x, 1.0, z);
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * scale, 0.25 * scale, 1.8 * scale, 8), materials.treeTrunk);
+      trunk.position.y = 0.9 * scale;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      const f1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25 * scale, 1), materials.treeFoliage);
+      f1.position.y = 2.4 * scale;
+      f1.castShadow = true;
+      tree.add(f1);
+
+      const f2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85 * scale, 1), materials.treeFoliage);
+      f2.position.set(0.35 * scale, 3.2 * scale, 0);
+      f2.castShadow = true;
+      tree.add(f2);
+
+      plantRoot.add(tree);
+    }
+
+    const treePositions = [
+      [-85, 34], [-75, 34], [-65, 34], [-85, -34], [-75, -34], [-65, -34],
+      [-48, 42], [-32, 42], [-16, 42], [4, 42], [20, 42], [36, 42],
+      [-48, -42], [-32, -42], [-16, -42], [4, -42], [20, -42], [36, -42]
+    ];
+    treePositions.forEach(([tx, tz]) => addTree(tx, tz, 1.15));
+
+    function createIndustrialComplex(x, z, w, h, d, hasGlassTower = true) {
+      const comp = new THREE.Group();
+      comp.position.set(x, 1.0, z);
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), materials.baseClay);
+      body.position.y = h / 2;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      comp.add(body);
+
+      const roofPeak = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.72, 3.4, 4), materials.panelWhite);
+      roofPeak.position.y = h + 1.7;
+      roofPeak.rotation.y = Math.PI / 4;
+      roofPeak.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d));
+      roofPeak.castShadow = true;
+      comp.add(roofPeak);
+
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, 1.2), materials.gpBlue);
+      win.position.set(0, h * 0.65, d / 2 + 0.05);
+      comp.add(win);
+
+      if (hasGlassTower) {
+        const atrium = new THREE.Mesh(new THREE.BoxGeometry(w * 0.35, h + 3, d * 0.35), materials.frostedGlass);
+        atrium.position.set(w * 0.3, (h + 3) / 2, d * 0.3);
+        atrium.castShadow = true;
+        comp.add(atrium);
+      }
+
+      const acUnit = new THREE.Mesh(new THREE.BoxGeometry(w * 0.3, 1.2, d * 0.25), materials.steelTruss);
+      acUnit.position.set(-w * 0.25, h + 0.6, 0);
+      acUnit.castShadow = true;
+      comp.add(acUnit);
+
+      plantRoot.add(comp);
+      return comp;
+    }
+
+    createIndustrialComplex(-68, -24, 18, 9, 22, true);
+    createIndustrialComplex(-38, -26, 16, 8, 18, false);
+    createIndustrialComplex(2, -28, 22, 10, 20, true);
+    createIndustrialComplex(34, -28, 16, 7, 16, false);
+    createIndustrialComplex(-72, 18, 14, 8, 14, false);
+
+    // PROCESS UNITS
+    const sepGroup = new THREE.Group();
+    sepGroup.position.set(-38, 1.0, 0);
+
+    const plinth1 = new THREE.Mesh(new THREE.BoxGeometry(22, 0.8, 24), materials.panelWhite);
+    plinth1.position.y = 0.4;
+    plinth1.receiveShadow = true;
+    sepGroup.add(plinth1);
+
+    for (let i = 0; i < 3; i++) {
+      const zP = -6 + i * 6;
+      const sep = new THREE.Mesh(new THREE.CylinderGeometry(1.65, 1.65, 10, 28), materials.baseClay);
+      sep.rotation.z = Math.PI / 2;
+      sep.position.set(-3, 3.4, zP);
+      sep.castShadow = true;
+      sepGroup.add(sep);
+
+      const capL = new THREE.Mesh(new THREE.SphereGeometry(1.65, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), materials.gpBlue);
+      capL.rotation.z = Math.PI / 2;
+      capL.position.set(-8, 3.4, zP);
+      const capR = capL.clone();
+      capR.rotation.z = -Math.PI / 2;
+      capR.position.set(2, 3.4, zP);
+      sepGroup.add(capL, capR);
+
+      const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.2, 2.4), materials.steelTruss);
+      leg1.position.set(-6, 1.5, zP);
+      const leg2 = leg1.clone();
+      leg2.position.x = 0;
+      sepGroup.add(leg1, leg2);
+
+      const gauge = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.4, 16), materials.darkAccent);
+      gauge.position.set(-3, 5.3, zP);
+      sepGroup.add(gauge);
+    }
+
+    for (let j = 0; j < 2; j++) {
+      const zC = -3.5 + j * 7.5;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 15, 28), materials.baseClay);
+      col.position.set(5.5, 8, zC);
+      col.castShadow = true;
+      sepGroup.add(col);
+
+      const glassSection = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 2.4, 28), materials.frostedGlass);
+      glassSection.position.set(5.5, 9, zC);
+      sepGroup.add(glassSection);
+
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), materials.gpBlue);
+      dome.position.set(5.5, 15.5, zC);
+      sepGroup.add(dome);
+
+      for (let p = 4; p <= 13; p += 4.5) {
+        const plat = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 0.25, 20), materials.steelTruss);
+        plat.position.set(5.5, p, zC);
+        sepGroup.add(plat);
+      }
+    }
+    plantRoot.add(sepGroup);
+
+    // NODE 2
+    const fracGroup = new THREE.Group();
+    fracGroup.position.set(-12, 1.0, 0);
+
+    const plinth2 = new THREE.Mesh(new THREE.BoxGeometry(20, 0.8, 26), materials.panelWhite);
+    plinth2.position.y = 0.4;
+    plinth2.receiveShadow = true;
+    fracGroup.add(plinth2);
+
+    const colSpecs = [
+      { r: 2.0, h: 28, x: -4, z: -3.5 },
+      { r: 1.6, h: 22, x: 2.5, z: 2.5 },
+      { r: 1.3, h: 18, x: 5.5, z: -5.5 }
+    ];
+
+    colSpecs.forEach((s) => {
+      const cMesh = new THREE.Mesh(new THREE.CylinderGeometry(s.r, s.r, s.h, 28), materials.baseClay);
+      cMesh.position.set(s.x, s.h / 2 + 0.8, s.z);
+      cMesh.castShadow = true;
+      fracGroup.add(cMesh);
+
+      const viewStrip = new THREE.Mesh(new THREE.CylinderGeometry(s.r + 0.05, s.r + 0.05, 3.5, 28), materials.frostedGlass);
+      viewStrip.position.set(s.x, s.h * 0.5, s.z);
+      fracGroup.add(viewStrip);
+
+      const topDome = new THREE.Mesh(new THREE.SphereGeometry(s.r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), materials.gpBlue);
+      topDome.position.set(s.x, s.h + 0.8, s.z);
+      fracGroup.add(topDome);
+
+      for (let lvl = 4; lvl < s.h; lvl += 4.2) {
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(s.r + 0.75, s.r + 0.75, 0.22, 20), materials.steelTruss);
+        ring.position.set(s.x, lvl, s.z);
+        fracGroup.add(ring);
+      }
+    });
+
+    const trussFrame = new THREE.Group();
+    for (let tx = -7.5; tx <= 7.5; tx += 5) {
+      for (let tz = -9; tz <= 9; tz += 6) {
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 18, 8), materials.steelTruss);
+        pillar.position.set(tx, 9, tz);
+        trussFrame.add(pillar);
+      }
+    }
+    for (let ty = 4.5; ty <= 18; ty += 4.5) {
+      const beamX = new THREE.Mesh(new THREE.BoxGeometry(15, 0.25, 0.25), materials.steelTruss);
+      beamX.position.set(0, ty, 0);
+      const beamZ = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 18), materials.steelTruss);
+      beamZ.position.set(0, ty, 0);
+      trussFrame.add(beamX, beamZ);
+    }
+    fracGroup.add(trussFrame);
+    plantRoot.add(fracGroup);
+
+    // NODE 3
+    const liqGroup = new THREE.Group();
+    liqGroup.position.set(12, 1.0, 0);
+
+    const plinth3 = new THREE.Mesh(new THREE.BoxGeometry(24, 0.8, 26), materials.panelWhite);
+    plinth3.position.y = 0.4;
+    liqGroup.add(plinth3);
+
+    const mcheCore = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.0, 23, 32), materials.baseClay);
+    mcheCore.position.set(-4, 12, -2);
+    mcheCore.castShadow = true;
+    liqGroup.add(mcheCore);
+
+    const mcheGlassJacket = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.4, 12, 32), materials.frostedGlass);
+    mcheGlassJacket.position.set(-4, 13, -2);
+    liqGroup.add(mcheGlassJacket);
+
+    const mcheDome = new THREE.Mesh(new THREE.SphereGeometry(3.6, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), materials.gpBlue);
+    mcheDome.position.set(-4, 23.5, -2);
+    liqGroup.add(mcheDome);
+
+    const compBuilding = new THREE.Mesh(new THREE.BoxGeometry(12, 9, 18), materials.baseClay);
+    compBuilding.position.set(6, 4.9, 0);
+    compBuilding.castShadow = true;
+    liqGroup.add(compBuilding);
+
+    const compGlassWall = new THREE.Mesh(new THREE.PlaneGeometry(10, 4.5), materials.cryoGlass);
+    compGlassWall.position.set(6, 5, 9.05);
+    liqGroup.add(compGlassWall);
+
+    for (let c = 0; c < 4; c++) {
+      const cooler = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.4, 3.4), materials.gpBlue);
+      cooler.position.set(2.5 + (c % 2) * 5, 10.2, -4.5 + Math.floor(c / 2) * 8);
+      cooler.castShadow = true;
+      liqGroup.add(cooler);
+    }
+    plantRoot.add(liqGroup);
+
+    // NODE 4
+    const tankGroup = new THREE.Group();
+    tankGroup.position.set(38, 1.0, -2);
+
+    for (let t = 0; t < 2; t++) {
+      const zT = t === 0 ? -8 : 9;
+
+      const tBase = new THREE.Mesh(new THREE.CylinderGeometry(9.0, 9.0, 13, 44), materials.panelWhite);
+      tBase.position.set(0, 7, zT);
+      tBase.castShadow = true;
+      tankGroup.add(tBase);
+
+      const tDome = new THREE.Mesh(new THREE.SphereGeometry(9.0, 44, 18, 0, Math.PI * 2, 0, Math.PI / 2), materials.baseClay);
+      tDome.position.set(0, 13.5, zT);
+      tankGroup.add(tDome);
+
+      const stripe = new THREE.Mesh(new THREE.CylinderGeometry(9.06, 9.06, 0.9, 44), materials.gpBlue);
+      stripe.position.set(0, 11, zT);
+      tankGroup.add(stripe);
+
+      const tankSight = new THREE.Mesh(new THREE.BoxGeometry(0.6, 11, 0.4), materials.frostedGlass);
+      tankSight.position.set(9.1, 7, zT);
+      tankGroup.add(tankSight);
+
+      const bund = new THREE.Mesh(new THREE.CylinderGeometry(11.8, 11.8, 2.4, 40, 1, true), materials.panelWhite);
+      bund.position.set(0, 1.2, zT);
+      bund.castShadow = true;
+      tankGroup.add(bund);
+    }
+    plantRoot.add(tankGroup);
+
+    // NODE 5
+    const termGroup = new THREE.Group();
+    termGroup.position.set(0, 0, 0);
+
+    const loadingArmGroup = new THREE.Group();
+    const standerPositionsZ = [-7, 0, 7];
+
+    standerPositionsZ.forEach((zPos) => {
+      const armStation = new THREE.Group();
+      armStation.position.set(53.5, 3.2, zPos);
+
+      const basePlate = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 1.6), materials.darkAccent);
+      basePlate.position.y = 0.2;
+      basePlate.castShadow = true;
+      armStation.add(basePlate);
+
+      const towerHeight = 7.5;
+      const standerTower = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, towerHeight, 20), materials.gpBlue);
+      standerTower.position.y = 0.4 + towerHeight / 2;
+      standerTower.castShadow = true;
+      armStation.add(standerTower);
+
+      const apexY = 0.4 + towerHeight;
+      const swivelJoint = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 14), materials.darkAccent);
+      swivelJoint.position.set(0, apexY, 0);
+      swivelJoint.castShadow = true;
+      armStation.add(swivelJoint);
+
+      const counterWeight = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.8, 0.8), materials.darkAccent);
+      counterWeight.position.set(-1.1, apexY + 0.1, 0);
+      counterWeight.castShadow = true;
+      armStation.add(counterWeight);
+
+      const armLength = 5.2;
+      const armAngle = Math.PI / 5;
+      const inboardArm = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, armLength, 16), materials.steelTruss);
+
+      const inboardPivot = new THREE.Group();
+      inboardPivot.position.set(0, apexY, 0);
+      inboardPivot.rotation.z = -armAngle;
+
+      inboardArm.position.y = armLength / 2;
+      inboardArm.castShadow = true;
+      inboardPivot.add(inboardArm);
+      armStation.add(inboardPivot);
+
+      const elbowX = Math.sin(armAngle) * armLength;
+      const elbowY = apexY + Math.cos(armAngle) * armLength;
+      const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), materials.darkAccent);
+      elbowJoint.position.set(elbowX, elbowY, 0);
+      armStation.add(elbowJoint);
+
+      const outboardLength = 6.8;
+      const outboardAngle = Math.PI / 3.4;
+      const outboardPivot = new THREE.Group();
+      outboardPivot.position.set(elbowX, elbowY, 0);
+      outboardPivot.rotation.z = -(Math.PI - outboardAngle);
+
+      const outboardArm = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, outboardLength, 16), materials.steelTruss);
+      outboardArm.position.y = outboardLength / 2;
+      outboardArm.castShadow = true;
+      outboardPivot.add(outboardArm);
+      armStation.add(outboardPivot);
+
+      const couplerX = elbowX + Math.sin(Math.PI - outboardAngle) * outboardLength;
+      const couplerY = elbowY - Math.cos(Math.PI - outboardAngle) * outboardLength;
+      const coupler = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.8, 16), materials.gpBlue);
+      coupler.position.set(couplerX, couplerY, 0);
+      coupler.castShadow = true;
+      armStation.add(coupler);
+
+      loadingArmGroup.add(armStation);
+    });
+
+    termGroup.add(loadingArmGroup);
+
+    // LNG TANKER
+    const hullGroup = new THREE.Group();
+    hullGroup.position.set(72, 1.0, 0);
+
+    const shipLength = 66;
+    const shipWidth = 18;
+    const shipHullHeight = 6.8;
+    const shipBody = new THREE.Mesh(new THREE.BoxGeometry(shipWidth, shipHullHeight, shipLength), materials.baseClay);
+    shipBody.position.y = shipHullHeight / 2 - 0.4;
+    shipBody.castShadow = true;
+    hullGroup.add(shipBody);
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(shipWidth - 0.5, 0.4, shipLength - 0.5), materials.roadWay);
+    deck.position.y = shipHullHeight - 0.2;
+    hullGroup.add(deck);
+
+    const manifoldPlatform = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 18), materials.steelTruss);
+    manifoldPlatform.position.set(-shipWidth / 2 + 1.2, shipHullHeight + 0.4, 0);
+    manifoldPlatform.castShadow = true;
+    hullGroup.add(manifoldPlatform);
+
+    for (let mz = -7; mz <= 7; mz += 7) {
+      const flangedPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.2, 16), materials.gpBlue);
+      flangedPipe.rotation.z = Math.PI / 2;
+      flangedPipe.position.set(-shipWidth / 2 + 0.6, shipHullHeight + 0.9, mz);
+      hullGroup.add(flangedPipe);
+    }
+
+    for (let m = 0; m < 4; m++) {
+      const tankZ = -22 + m * 14.5;
+      const mossTank = new THREE.Mesh(new THREE.SphereGeometry(4.6, 32, 24), materials.panelWhite);
+      mossTank.position.set(0, shipHullHeight + 3.0, tankZ);
+      mossTank.castShadow = true;
+      hullGroup.add(mossTank);
+
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(4.65, 0.18, 10, 32), materials.gpBlue);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(0, shipHullHeight + 3.0, tankZ);
+      hullGroup.add(ring);
+
+      const shield = new THREE.Mesh(new THREE.SphereGeometry(4.9, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), materials.frostedGlass);
+      shield.position.set(0, shipHullHeight + 3.0, tankZ);
+      hullGroup.add(shield);
+    }
+
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(15, 8.5, 9), materials.baseClay);
+    bridge.position.set(0, shipHullHeight + 4.25, 26);
+    bridge.castShadow = true;
+    hullGroup.add(bridge);
+
+    const bridgeWindows = new THREE.Mesh(new THREE.PlaneGeometry(13.5, 1.5), materials.cryoGlass);
+    bridgeWindows.position.set(0, shipHullHeight + 7.2, 21.4);
+    hullGroup.add(bridgeWindows);
+
+    termGroup.add(hullGroup);
+    plantRoot.add(termGroup);
+
+    // PIPELINE & FLOW PARTICLES
+    const pipePoints = [
+      new THREE.Vector3(-38, 3.6, 0),
+      new THREE.Vector3(-12, 3.6, 0),
+      new THREE.Vector3(12, 3.6, 0),
+      new THREE.Vector3(38, 3.6, 0),
+      new THREE.Vector3(53.5, 3.6, 0)
+    ];
+
+    const mainPipeCurve = new THREE.CatmullRomCurve3(pipePoints);
+    const pipeGeo = new THREE.TubeGeometry(mainPipeCurve, 90, 0.48, 16, false);
+    const pipeMesh = new THREE.Mesh(pipeGeo, materials.panelWhite);
+    pipeMesh.castShadow = true;
+    plantRoot.add(pipeMesh);
+
+    for (let px = -36; px <= 50; px += 6.5) {
+      const rack = new THREE.Group();
+      rack.position.set(px, 1.0, 0);
+
+      const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.2, 8), materials.steelTruss);
+      legL.position.set(0, 1.6, -1.3);
+      const legR = legL.clone();
+      legR.position.z = 1.3;
+
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 2.9), materials.steelTruss);
+      beam.position.set(0, 3.1, 0);
+
+      rack.add(legL, legR, beam);
+      plantRoot.add(rack);
+    }
+
+    const particleCount = 220;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePos = new Float32Array(particleCount * 3);
+    const progressArray = new Float32Array(particleCount);
+
+    for (let p = 0; p < particleCount; p++) {
+      progressArray[p] = p / particleCount;
+      const pt = mainPipeCurve.getPointAt(progressArray[p]);
+      particlePos[p * 3] = pt.x;
+      particlePos[p * 3 + 1] = pt.y + 0.05;
+      particlePos[p * 3 + 2] = pt.z;
+    }
+
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0x0062ff,
+      size: 0.9,
+      transparent: true,
+      opacity: 0.95
+    });
+    const flowParticles = new THREE.Points(particleGeo, particleMat);
+    plantRoot.add(flowParticles);
+
+    // HOTSPOTS
+    const hotspots = [];
+    const hotspotCoords = [
+      { step: 0, x: -38, y: 17.0, z: 0 },
+      { step: 1, x: -12, y: 26.0, z: 0 },
+      { step: 2, x: 12, y: 23.5, z: -2 },
+      { step: 3, x: 38, y: 19.5, z: 0 },
+      { step: 4, x: 62, y: 16.5, z: 0 }
+    ];
+
+    hotspotCoords.forEach((h, idx) => {
+      const pinGroup = new THREE.Group();
+      pinGroup.position.set(h.x, h.y, h.z);
+
+      const circleMat = new THREE.MeshBasicMaterial({ color: 0x0062ff });
+      const pinSphere = new THREE.Mesh(new THREE.SphereGeometry(0.85, 16, 16), circleMat);
+
+      const haloMat = new THREE.MeshBasicMaterial({ color: 0x00d0f5, side: THREE.DoubleSide });
+      const pinHalo = new THREE.Mesh(new THREE.RingGeometry(1.05, 1.45, 24), haloMat);
+      pinHalo.rotation.x = Math.PI / 2;
+
+      pinGroup.add(pinSphere, pinHalo);
+      pinGroup.userData = { stepIndex: idx };
+      scene.add(pinGroup);
+      hotspots.push(pinGroup);
+    });
+
+    // RAYCASTING
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.interactive')) return;
+
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(hotspots, true);
+
+      if (intersects.length > 0) {
+        let parent = intersects[0].object.parent;
+        if (parent && parent.userData.stepIndex !== undefined) {
+          goToStep(parent.userData.stepIndex);
+        }
+      }
+    });
+
+    // HUD & NAVIGATION
+    function updateHUD(stepIndex) {
+      const data = tourData[stepIndex];
+
+      document.getElementById('stepBadge').innerText = data.stepOrder;
+      document.getElementById('cardTitle').innerText = data.title;
+      document.getElementById('cardCategory').innerText = data.category;
+      document.getElementById('cardDesc').innerText = data.desc;
+
+      const grid = document.getElementById('metricsGrid');
+      grid.innerHTML = '';
+      data.metrics.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'metric-card-interactive';
+
+        item.innerHTML = `
+          <div class="metric-card-top">
+            <span class="metric-name">${m.name}</span>
+            <span class="metric-trend-tag ${m.status}">${m.trend}</span>
+          </div>
+          <div class="metric-val">
+            ${m.val} <span class="metric-unit">${m.unit}</span>
+          </div>
+          <div class="metric-meter-bar">
+            <div class="metric-meter-fill" style="width: 0%;"></div>
+          </div>
+        `;
+        grid.appendChild(item);
+
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const fillEl = item.querySelector('.metric-meter-fill');
+            if (fillEl) fillEl.style.width = `${m.fill}%`;
+          }, 50);
+        });
+      });
+
+      document.getElementById('caseTitle').innerText = data.caseTitle;
+      document.getElementById('caseDetail').innerText = data.caseDetail;
+      document.getElementById('caseEffect').innerText = data.caseEffect;
+
+      const steps = document.querySelectorAll('.step-item');
+      steps.forEach((el, idx) => {
+        if (idx === stepIndex) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+
+      const card = document.getElementById('infoCard');
+      card.style.transform = 'scale(0.975) translateY(4px)';
+      card.style.opacity = '0.7';
+      setTimeout(() => {
+        card.style.transform = 'scale(1) translateY(0)';
+        card.style.opacity = '1';
+      }, 120);
+    }
+
+    function animateCameraTo(targetPos, lookAtPos, duration = 1600) {
+      new TWEEN.Tween(camera.position)
+        .to(targetPos, duration)
+        .easing(TWEEN.Easing.Cubic.InOut)
+        .start();
+
+      new TWEEN.Tween(controls.target)
+        .to(lookAtPos, duration)
+        .easing(TWEEN.Easing.Cubic.InOut)
+        .start();
+    }
+
+    function goToStep(index) {
+      currentStep = index;
+      const target = tourData[currentStep];
+      updateHUD(currentStep);
+      animateCameraTo(target.camera, target.lookAt);
+    }
+
+    function nextStep() {
+      currentStep = (currentStep + 1) % tourData.length;
+      goToStep(currentStep);
+    }
+
+    function prevStep() {
+      currentStep = (currentStep - 1 + tourData.length) % tourData.length;
+      goToStep(currentStep);
+    }
+
+    function toggleAutoTour() {
+      isAutoTour = !isAutoTour;
+      const btn = document.getElementById('autoTourBtn');
+      const icon = document.getElementById('playIcon');
+      const label = btn.querySelector('span');
+
+      if (isAutoTour) {
+        btn.classList.add('active-tour');
+        icon.className = 'fa-solid fa-pause';
+        if (label) label.innerText = 'Пауза';
+        startAutoTourLoop();
+      } else {
+        btn.classList.remove('active-tour');
+        icon.className = 'fa-solid fa-play';
+        if (label) label.innerText = 'Авто-тур';
+        if (autoTourTimer) clearInterval(autoTourTimer);
+      }
+    }
+
+    function startAutoTourLoop() {
+      if (autoTourTimer) clearInterval(autoTourTimer);
+      autoTourTimer = setInterval(() => {
+        if (!isAutoTour) return;
+        nextStep();
+      }, 7000);
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', prevStep);
+    document.getElementById('nextBtn').addEventListener('click', nextStep);
+    document.getElementById('autoTourBtn').addEventListener('click', toggleAutoTour);
+    for (let i = 0; i < 5; i++) {
+      const stepBtn = document.getElementById(`step-btn-${i}`);
+      if (stepBtn) {
+        stepBtn.addEventListener('click', () => goToStep(i));
+      }
+    }
+
+    // MEMORY MANAGEMENT (DISPOSE)
+    function disposeNode(node) {
+      if (node.geometry) {
+        node.geometry.dispose();
+      }
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => disposeMaterial(mat));
+        } else {
+          disposeMaterial(node.material);
+        }
+      }
+    }
+
+    function disposeMaterial(mat) {
+      for (const key of Object.keys(mat)) {
+        const val = mat[key];
+        if (val && typeof val === 'object' && 'minFilter' in val) {
+          val.dispose();
+        }
+      }
+      mat.dispose();
+    }
+
+    function disposeSceneGraph(root) {
+      root.traverse((child) => {
+        disposeNode(child);
+      });
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (autoTourTimer) clearInterval(autoTourTimer);
+      disposeSceneGraph(scene);
+      if (scene.environment) scene.environment.dispose();
+      renderer.dispose();
+    });
+
+    // ANIMATION LOOP
+    const clock = new THREE.Clock();
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+
+      TWEEN.update(time);
+      controls.update();
+
+      const delta = clock.getDelta();
+
+      const posAttr = particleGeo.attributes.position;
+      for (let p = 0; p < particleCount; p++) {
+        progressArray[p] = (progressArray[p] + delta * 0.075) % 1;
+        const pt = mainPipeCurve.getPointAt(progressArray[p]);
+        posAttr.setXYZ(p, pt.x, pt.y + 0.05, pt.z);
+      }
+      posAttr.needsUpdate = true;
+
+      hotspots.forEach((pin, i) => {
+        pin.position.y = hotspotCoords[i].y + Math.sin(time * 0.003 + i) * 0.45;
+        pin.lookAt(camera.position);
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    // RESIZE
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    goToStep(0);
+    animate(0);
+  </script>
+</body>
+</html>
+```eof
+
+### Что изменилось:
+1. **Плашка с кнопками быстрого выбора полностью удалена:**
+   * Убран блок `.demo-accounts-pill` и вспомогательная функция `fillDemo()`.
+   * Форма теперь строго ориентирована на **ручной ввод** логина и пароля (или регистрацию нового пользователя с вводом ФИО, Email и пароля).
+2. **Учётные записи по-прежнему активны в системе:**
+   * Вы можете вводить вручную как данные предустановленных аккаунтов (например, `qwes.rev@gmail.com` / `Gazprom2026!Student`), так и регистрировать совершенно новые учётные записи через вкладку **«Регистрация»**.
